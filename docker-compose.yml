@@ -15,6 +15,9 @@ services:
     container_name: openshorts-frontend
     ports:
       - "5175:5173"
+    environment:
+      OPENSORTS_API_PROXY: http://backend:8000
+      OPENSORTS_RENDER_PROXY: http://renderer:3100
     volumes:
       - ./dashboard:/app
       - /app/node_modules

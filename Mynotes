@@ -1,0 +1,3 @@
+Easy delete from VM (as requested)
+ssh -i "C:\Users\Lenovo\OneDrive\Documents\proctor-ai-DB-server_key.pem" azureuser@20.193.132.33 \
+"cd ~/openshorts && docker-compose down --volumes; cd ~ && rm -rf ~/openshorts"

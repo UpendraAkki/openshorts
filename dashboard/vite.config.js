@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Local `npm run dev`: defaults to localhost. Docker Compose sets these to service hostnames.
+const apiProxyTarget = process.env.OPENSORTS_API_PROXY ?? 'http://127.0.0.1:8000'
+const renderProxyTarget = process.env.OPENSORTS_RENDER_PROXY ?? 'http://127.0.0.1:3100'
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -11,27 +15,27 @@ export default defineConfig({
     ],
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/videos': {
-        target: 'http://backend:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/thumbnails': {
-        target: 'http://backend:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/gallery': {
-        target: 'http://backend:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/video': {
-        target: 'http://backend:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/render': {
-        target: 'http://renderer:3100',
+        target: renderProxyTarget,
         changeOrigin: true,
       }
     }
