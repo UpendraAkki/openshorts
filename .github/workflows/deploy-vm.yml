@@ -11,6 +11,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Validate deploy configuration
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -e
+          if [ -z "$VM_HOST" ]; then
+            echo "Missing VM_HOST secret."
+            exit 1
+          fi
+          if [ -z "$VM_USER" ]; then
+            echo "Missing VM_USER secret."
+            exit 1
+          fi
+          if [ -z "$VM_KEY" ]; then
+            echo "Missing VM_SSH_PRIVATE_KEY secret."
+            exit 1
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:

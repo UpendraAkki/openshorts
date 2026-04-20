@@ -150,23 +150,33 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
         setEditError(null);
         try {
             if (options.remotion) {
-                // Accumulate layer and render all layers together
-                const newLayers = { ...activeLayers, subtitles: options.remotion };
-                setActiveLayers(newLayers);
-                const blobUrl = await renderInBrowser({
-                    videoUrl: originalVideoUrl,
-                    durationInSeconds: clipDuration,
-                    subtitles: newLayers.subtitles,
-                    hook: newLayers.hook,
-                    effects: newLayers.effects,
-                });
-                setCurrentVideoUrl(blobUrl);
-                if (videoRef.current) videoRef.current.load();
-                setShowSubtitleModal(false);
-                return;
+                try {
+                    // Accumulate layer and render all layers together.
+                    // If browser decode fails, we silently fall back to server subtitles below.
+                    const newLayers = { ...activeLayers, subtitles: options.remotion };
+                    setActiveLayers(newLayers);
+                    const blobUrl = await renderInBrowser({
+                        videoUrl: originalVideoUrl,
+                        durationInSeconds: clipDuration,
+                        subtitles: newLayers.subtitles,
+                        hook: newLayers.hook,
+                        effects: newLayers.effects,
+                    });
+                    setCurrentVideoUrl(blobUrl);
+                    if (videoRef.current) videoRef.current.load();
+                    setShowSubtitleModal(false);
+                    return;
+                } catch (renderErr) {
+                    console.warn('Remotion subtitle render failed, falling back to backend FFmpeg:', renderErr);
+                }
             }
 
             // Fallback: legacy FFmpeg
+            const currentFilename = currentVideoUrl?.split('/').pop();
+            const originalFilename = clip?.video_url?.split('/').pop();
+            const inputFilename = currentVideoUrl?.startsWith('blob:')
+                ? originalFilename
+                : (currentFilename || originalFilename);
             const res = await fetch(getApiUrl('/api/subtitle'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -181,7 +191,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                     border_width: options.borderWidth,
                     bg_color: options.bgColor,
                     bg_opacity: options.bgOpacity,
-                    input_filename: currentVideoUrl.split('/').pop()
+                    input_filename: inputFilename
                 })
             });
 

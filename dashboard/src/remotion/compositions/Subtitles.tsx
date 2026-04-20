@@ -120,10 +120,8 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
           flexWrap: "wrap",
           justifyContent: "center",
           alignItems: "center",
-          gap: `${Math.max(4, style.fontSize * 0.12)}px ${Math.max(
-            8,
-            style.fontSize * 0.3
-          )}px`,
+          columnGap: 0,
+          rowGap: `${Math.max(4, style.fontSize * 0.14)}px`,
           maxWidth: "85%",
           lineHeight: 1.25,
           ...bgStyle,
@@ -141,6 +139,7 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
             fps={fps}
             wordStartMs={word.startMs}
             blockStartMs={blockStartMs}
+            isLast={i === block.words.length - 1}
           />
         ))}
       </div>
@@ -158,6 +157,7 @@ interface WordSpanProps {
   fps: number;
   wordStartMs: number;
   blockStartMs: number;
+  isLast: boolean;
 }
 
 const WordSpan: React.FC<WordSpanProps> = ({
@@ -170,6 +170,7 @@ const WordSpan: React.FC<WordSpanProps> = ({
   fps,
   wordStartMs,
   blockStartMs,
+  isLast,
 }) => {
   const wordStartFrame = Math.round(
     ((wordStartMs - blockStartMs) / 1000) * fps
@@ -243,6 +244,7 @@ const WordSpan: React.FC<WordSpanProps> = ({
         transformOrigin: "center center",
         transition: "none",
         whiteSpace: "nowrap",
+        marginRight: isLast ? 0 : "0.34em",
         ...extraStyle,
       }}
     >
