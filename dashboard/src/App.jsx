@@ -810,7 +810,7 @@ function App() {
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
                   {results && results.clips && results.clips.length > 0 ? (
-                    <div className={`grid gap-4 pb-10 ${status === 'complete' ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'}`}>
+                    <div className={`grid gap-4 pb-10 ${status === 'complete' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
                       {results.clips.map((clip, i) => (
                         <ResultCard
                           key={i}

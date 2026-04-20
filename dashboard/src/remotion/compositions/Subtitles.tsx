@@ -21,6 +21,22 @@ const POSITION_MAP: Record<string, React.CSSProperties> = {
   bottom: { bottom: "10%", top: "auto" },
 };
 
+const getPositionStyle = (
+  position: string,
+  verticalPosition?: number
+): React.CSSProperties => {
+  // If a custom vertical position is provided, use it and anchor by translateY(-50%)
+  if (typeof verticalPosition === "number") {
+    const clamped = Math.min(100, Math.max(0, verticalPosition));
+    return {
+      top: `${clamped}%`,
+      bottom: "auto",
+      transform: "translateY(-50%)",
+    };
+  }
+  return POSITION_MAP[position] ?? POSITION_MAP.bottom;
+};
+
 export const Subtitles: React.FC<SubtitlesProps> = ({ config }) => {
   const { fps } = useVideoConfig();
   const blocks = groupCaptionsIntoBlocks(config.captions);
@@ -72,7 +88,7 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
   const currentTimeMs = blockStartMs + (frame / fps) * 1000;
   const activeIndex = getActiveWordIndex(block.words, currentTimeMs);
 
-  const positionStyle = POSITION_MAP[position] ?? POSITION_MAP.bottom;
+  const positionStyle = getPositionStyle(position, config.verticalPosition);
   const fontStack = getFontStack(style.fontFamily);
 
   // Background box style
@@ -103,8 +119,13 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
           display: "flex",
           flexWrap: "wrap",
           justifyContent: "center",
-          gap: "6px 8px",
+          alignItems: "center",
+          gap: `${Math.max(4, style.fontSize * 0.12)}px ${Math.max(
+            8,
+            style.fontSize * 0.3
+          )}px`,
           maxWidth: "85%",
+          lineHeight: 1.25,
           ...bgStyle,
         }}
       >
@@ -209,7 +230,9 @@ const WordSpan: React.FC<WordSpanProps> = ({
       style={{
         fontFamily: fontStack,
         fontSize: style.fontSize,
-        fontWeight: 700,
+        fontWeight: 800,
+        lineHeight: 1.15,
+        letterSpacing: "0.01em",
         color: animation === "karaoke" && isActive ? undefined : color,
         textShadow:
           animation !== "karaoke"
@@ -217,7 +240,9 @@ const WordSpan: React.FC<WordSpanProps> = ({
             : strokeShadow,
         transform,
         display: "inline-block",
+        transformOrigin: "center center",
         transition: "none",
+        whiteSpace: "nowrap",
         ...extraStyle,
       }}
     >

@@ -30,6 +30,7 @@ const ANIMATION_OPTIONS = [
 
 export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessing, videoUrl, jobId, clipIndex, existingHook }) {
     const [position, setPosition] = useState('bottom');
+    const [verticalPosition, setVerticalPosition] = useState(85); // 0=top, 100=bottom
     const [fontSize, setFontSize] = useState(24);
     const [fontName, setFontName] = useState('Verdana');
     const [fontColor, setFontColor] = useState('#FFFFFF');
@@ -99,6 +100,7 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
     const subtitleConfig = {
         captions,
         position,
+        verticalPosition,
         style: {
             fontFamily: fontName,
             fontSize: fontSize * 2.2, // Scale up for 1080p (modal fontSize is for small preview)
@@ -168,11 +170,10 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
                     ) : (
                         <>
                             <video src={videoUrl} className="w-full h-full object-contain opacity-50" muted playsInline />
-                            <div className={`absolute w-full px-8 text-center transition-all duration-300 pointer-events-none flex flex-col items-center justify-center
-                                ${position === 'top' ? 'top-20' : ''}
-                                ${position === 'middle' ? 'top-0 bottom-0' : ''}
-                                ${position === 'bottom' ? 'bottom-20' : ''}
-                            `}>
+                            <div
+                                className="absolute left-0 right-0 px-8 text-center transition-all duration-300 pointer-events-none flex flex-col items-center justify-center"
+                                style={{ top: `${verticalPosition}%`, transform: 'translateY(-50%)' }}
+                            >
                                 <span style={fallbackPreviewStyle}>
                                     This is how your subtitles<br/>will appear on the video
                                 </span>
@@ -190,18 +191,59 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
                     <div className="space-y-5 flex-1 overflow-y-auto custom-scrollbar pr-1">
                         {/* Position Selector */}
                         <div>
-                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Position</label>
+                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Position Preset</label>
                             <div className="grid grid-cols-3 gap-2">
-                                {['top', 'middle', 'bottom'].map((pos) => (
+                                {[
+                                    { key: 'top', vp: 15 },
+                                    { key: 'middle', vp: 50 },
+                                    { key: 'bottom', vp: 85 },
+                                ].map(({ key, vp }) => (
                                     <button
-                                        key={pos}
-                                        onClick={() => setPosition(pos)}
-                                        className={`p-2 rounded-lg border text-center text-xs font-medium transition-all ${position === pos ? 'bg-primary/20 border-primary text-white' : 'bg-white/5 border-white/5 text-zinc-400 hover:bg-white/10'}`}
+                                        key={key}
+                                        onClick={() => { setPosition(key); setVerticalPosition(vp); }}
+                                        className={`p-2 rounded-lg border text-center text-xs font-medium transition-all ${position === key ? 'bg-primary/20 border-primary text-white' : 'bg-white/5 border-white/5 text-zinc-400 hover:bg-white/10'}`}
                                     >
-                                        {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                                        {key.charAt(0).toUpperCase() + key.slice(1)}
                                     </button>
                                 ))}
                             </div>
+                        </div>
+
+                        {/* Vertical Position Slider */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Vertical Position</label>
+                                <span className="text-[10px] font-mono text-zinc-500">{verticalPosition}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={verticalPosition}
+                                onChange={(e) => setVerticalPosition(parseInt(e.target.value))}
+                                className="w-full accent-primary"
+                            />
+                            <div className="flex justify-between text-[10px] text-zinc-500 mt-1">
+                                <span>Top</span>
+                                <span>Middle</span>
+                                <span>Bottom</span>
+                            </div>
+                        </div>
+
+                        {/* Font Size Slider */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Font Size</label>
+                                <span className="text-[10px] font-mono text-zinc-500">{fontSize}px</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="14"
+                                max="48"
+                                value={fontSize}
+                                onChange={(e) => setFontSize(parseInt(e.target.value))}
+                                className="w-full accent-primary"
+                            />
                         </div>
 
                         {/* Animation Style (new) */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, CheckCircle, AlertCircle, X, Loader2, Copy, Wand2, Type, Calendar, Clock, Languages } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, CheckCircle, AlertCircle, X, Loader2, Copy, Wand2, Type, Calendar, Clock, Languages, Maximize2, Minimize2, ChevronDown, ChevronUp, Play } from 'lucide-react';
 import { getApiUrl } from '../config';
 import SubtitleModal from './SubtitleModal';
 import HookModal from './HookModal';
@@ -33,6 +33,8 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
     const [showHookModal, setShowHookModal] = useState(false);
     const [showTranslateModal, setShowTranslateModal] = useState(false);
     const [editError, setEditError] = useState(null);
+    const [showFullscreen, setShowFullscreen] = useState(false);
+    const [showMetadata, setShowMetadata] = useState(false);
 
     const [clipDuration, setClipDuration] = useState(clip.end && clip.start ? clip.end - clip.start : 30);
 
@@ -88,8 +90,17 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
             if (effectsRes.ok) {
                 const data = await effectsRes.json();
                 if (data.effects && data.effects.segments) {
-                    setCompositionParams(prev => ({ ...prev, effects: data.effects }));
-                    setShowPreviewModal(true);
+                    const newLayers = { ...activeLayers, effects: data.effects };
+                    setActiveLayers(newLayers);
+                    const blobUrl = await renderInBrowser({
+                        videoUrl: originalVideoUrl,
+                        durationInSeconds: clipDuration,
+                        subtitles: newLayers.subtitles,
+                        hook: newLayers.hook,
+                        effects: newLayers.effects,
+                    });
+                    setCurrentVideoUrl(blobUrl);
+                    if (videoRef.current) videoRef.current.load();
                     return;
                 }
             }
@@ -374,14 +385,14 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
     };
 
     return (
-        <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col md:flex-row group hover:border-white/10 transition-all animate-[fadeIn_0.5s_ease-out] min-h-[300px] h-auto" style={{ animationDelay: `${index * 0.1}s` }}>
-            {/* Left: Video Preview (Responsive Width) */}
-            <div className="w-full md:w-[180px] lg:w-[200px] bg-black relative shrink-0 aspect-[9/16] md:aspect-auto group/video">
+        <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col group hover:border-white/10 transition-all animate-[fadeIn_0.5s_ease-out]" style={{ animationDelay: `${index * 0.1}s` }}>
+            {/* Video Preview — large & responsive */}
+            <div className="w-full bg-black relative aspect-[9/16] max-h-[70vh] sm:max-h-[65vh] mx-auto group/video" style={{ maxWidth: 'min(100%, 420px)' }}>
                 <video
                     ref={videoRef}
                     src={currentVideoUrl}
                     controls
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain bg-black"
                     playsInline
                     onPlay={() => {
                         const currentTime = videoRef.current ? videoRef.current.currentTime : 0;
@@ -395,11 +406,22 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                         }
                     }}
                 />
-                <div className="absolute top-3 left-3 flex gap-2">
+                <div className="absolute top-3 left-3 flex gap-2 pointer-events-none">
                     <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-md border border-white/10 uppercase tracking-wide">
                         Clip {index + 1}
                     </span>
+                    <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-mono px-2 py-1 rounded-md border border-white/10">
+                        {Math.floor(clip.end - clip.start)}s
+                    </span>
                 </div>
+
+                <button
+                    onClick={() => setShowFullscreen(true)}
+                    className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white p-2 rounded-md border border-white/10 transition-all opacity-0 group-hover/video:opacity-100 focus:opacity-100"
+                    title="Expand"
+                >
+                    <Maximize2 size={14} />
+                </button>
 
                 {/* Auto Edit Overlay if Processing */}
                 {isEditing && (
@@ -411,44 +433,49 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                 )}
             </div>
 
-            {/* Right: Content & Details */}
-            <div className="flex-1 p-4 md:p-5 flex flex-col bg-[#121214] overflow-hidden min-w-0">
-                <div className="mb-4">
-                    <h3 className="text-base font-bold text-white leading-tight line-clamp-2 mb-2 break-words" title={clip.video_title_for_youtube_short}>
-                        {clip.video_title_for_youtube_short || "Viral Clip Generated"}
-                    </h3>
-                    <div className="flex flex-wrap gap-2 text-[10px] text-zinc-500 font-mono">
-                        <span className="bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shrink-0">{Math.floor(clip.end - clip.start)}s</span>
-                        <span className="bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shrink-0">#shorts</span>
-                        <span className="bg-white/5 px-1.5 py-0.5 rounded border border-white/5 shrink-0">#viral</span>
+            {/* Content & Details */}
+            <div className="p-4 md:p-5 flex flex-col bg-[#121214] min-w-0">
+                <div className="mb-3">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                        <h3 className="text-base font-bold text-white leading-tight line-clamp-2 break-words flex-1" title={clip.video_title_for_youtube_short}>
+                            {clip.video_title_for_youtube_short || "Viral Clip Generated"}
+                        </h3>
+                        <button
+                            onClick={() => setShowMetadata(v => !v)}
+                            className="shrink-0 text-zinc-400 hover:text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 bg-white/5 hover:bg-white/10 rounded-md px-2 py-1 border border-white/5 transition-colors"
+                            title={showMetadata ? 'Hide details' : 'Show details'}
+                        >
+                            {showMetadata ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            <span>{showMetadata ? 'Hide' : 'Details'}</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* Scrollable Descriptions Area */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2 mb-4">
-                    {/* YouTube */}
-                    <div className="bg-black/20 rounded-lg p-3 border border-white/5">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-red-400 mb-1.5 uppercase tracking-wider">
-                            <Youtube size={12} className="shrink-0" /> <span className="truncate">YouTube Title</span>
+                {/* Collapsible Metadata */}
+                {showMetadata && (
+                    <div className="space-y-3 mb-4 animate-[fadeIn_0.15s_ease-out]">
+                        <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-red-400 mb-1.5 uppercase tracking-wider">
+                                <Youtube size={12} className="shrink-0" /> <span className="truncate">YouTube Title</span>
+                            </div>
+                            <p className="text-xs text-zinc-300 select-all break-words">
+                                {clip.video_title_for_youtube_short || "Viral Short Video"}
+                            </p>
                         </div>
-                        <p className="text-xs text-zinc-300 select-all break-words">
-                            {clip.video_title_for_youtube_short || "Viral Short Video"}
-                        </p>
-                    </div>
 
-                    {/* TikTok / IG */}
-                    <div className="bg-black/20 rounded-lg p-3 border border-white/5">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                            <Video size={12} className="text-cyan-400 shrink-0" />
-                            <span className="text-zinc-500">/</span>
-                            <Instagram size={12} className="text-pink-400 shrink-0" />
-                            <span className="truncate">Caption</span>
+                        <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                                <Video size={12} className="text-cyan-400 shrink-0" />
+                                <span className="text-zinc-500">/</span>
+                                <Instagram size={12} className="text-pink-400 shrink-0" />
+                                <span className="truncate">Caption</span>
+                            </div>
+                            <p className="text-xs text-zinc-300 select-all break-words whitespace-pre-wrap">
+                                {clip.video_description_for_tiktok || clip.video_description_for_instagram}
+                            </p>
                         </div>
-                        <p className="text-xs text-zinc-300 line-clamp-3 hover:line-clamp-none transition-all cursor-pointer select-all break-words">
-                            {clip.video_description_for_tiktok || clip.video_description_for_instagram}
-                        </p>
                     </div>
-                </div>
+                )}
 
                 {/* Error Message */}
                 {editError && (
@@ -459,7 +486,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                 )}
 
                 {/* Actions Footer */}
-                <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-white/5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-auto pt-3 border-t border-white/5">
                     <button
                         onClick={handleAutoEdit}
                         disabled={isEditing}
@@ -505,18 +532,37 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                     <button
                         onClick={async (e) => {
                             e.preventDefault();
+                            const filename = `clip-${index + 1}.mp4`;
                             try {
+                                // If already a blob URL (from in-browser render), download it directly
+                                // to avoid re-fetching which can fail and to preserve the MP4 MIME.
+                                if (currentVideoUrl.startsWith('blob:')) {
+                                    const a = document.createElement('a');
+                                    a.style.display = 'none';
+                                    a.href = currentVideoUrl;
+                                    a.download = filename;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    return;
+                                }
+
                                 const response = await fetch(currentVideoUrl);
-                                if (!response.ok) throw new Error('Download failed');
-                                const blob = await response.blob();
+                                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                const rawBlob = await response.blob();
+                                // Force MP4 MIME type so OS media players open it correctly.
+                                const blob = rawBlob.type && rawBlob.type.startsWith('video/')
+                                    ? rawBlob
+                                    : new Blob([rawBlob], { type: 'video/mp4' });
                                 const url = window.URL.createObjectURL(blob);
                                 const a = document.createElement('a');
                                 a.style.display = 'none';
                                 a.href = url;
-                                a.download = `clip-${index + 1}.mp4`;
+                                a.download = filename;
                                 document.body.appendChild(a);
                                 a.click();
-                                window.URL.revokeObjectURL(url);
+                                // Defer revoke so some browsers finish writing the file
+                                setTimeout(() => window.URL.revokeObjectURL(url), 2000);
                                 document.body.removeChild(a);
                             } catch (err) {
                                 console.error('Download error:', err);
@@ -670,6 +716,30 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                 videoUrl={currentVideoUrl}
                 hasApiKey={!!elevenLabsKey}
             />
+
+            {/* Fullscreen Video Modal */}
+            {showFullscreen && (
+                <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center animate-[fadeIn_0.15s_ease-out]" onClick={() => setShowFullscreen(false)}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowFullscreen(false); }}
+                        className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg border border-white/10 transition-all z-10"
+                        title="Close"
+                    >
+                        <X size={20} />
+                    </button>
+                    <div className="h-full w-full flex items-center justify-center p-4 sm:p-8" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative h-full max-h-[95vh] aspect-[9/16] bg-black rounded-xl overflow-hidden shadow-2xl">
+                            <video
+                                src={currentVideoUrl}
+                                controls
+                                autoPlay
+                                className="w-full h-full object-contain"
+                                playsInline
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

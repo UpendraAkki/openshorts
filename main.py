@@ -631,7 +631,11 @@ def process_video_to_vertical(input_video, final_output_video):
         'ffmpeg', '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
         '-s', f'{OUTPUT_WIDTH}x{OUTPUT_HEIGHT}', '-pix_fmt', 'bgr24',
         '-r', str(fps), '-i', '-', '-c:v', 'libx264',
-        '-preset', 'fast', '-crf', '23', '-an', temp_video_output
+        '-preset', 'slow', '-crf', '17',
+        '-profile:v', 'high', '-level', '4.2',
+        '-pix_fmt', 'yuv420p',
+        '-movflags', '+faststart',
+        '-an', temp_video_output
     ]
 
     ffmpeg_process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -716,7 +720,9 @@ def process_video_to_vertical(input_video, final_output_video):
 
     print("\n   🔊 Step 5: Extracting audio...")
     audio_extract_command = [
-        'ffmpeg', '-y', '-i', input_video, '-vn', '-acodec', 'copy', temp_audio_output
+        'ffmpeg', '-y', '-i', input_video, '-vn',
+        '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
+        temp_audio_output
     ]
     try:
         subprocess.run(audio_extract_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -728,12 +734,16 @@ def process_video_to_vertical(input_video, final_output_video):
     if os.path.exists(temp_audio_output):
         merge_command = [
             'ffmpeg', '-y', '-i', temp_video_output, '-i', temp_audio_output,
-            '-c:v', 'copy', '-c:a', 'copy', final_output_video
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+            '-movflags', '+faststart',
+            final_output_video
         ]
     else:
          merge_command = [
             'ffmpeg', '-y', '-i', temp_video_output,
-            '-c:v', 'copy', final_output_video
+            '-c:v', 'copy',
+            '-movflags', '+faststart',
+            final_output_video
         ]
         
     try:
@@ -991,12 +1001,15 @@ if __name__ == '__main__':
                 # ffmpeg cut
                 # Using re-encoding for precision as requested by strict seconds
                 cut_command = [
-                    'ffmpeg', '-y', 
-                    '-ss', str(start), 
-                    '-to', str(end), 
+                    'ffmpeg', '-y',
+                    '-ss', str(start),
+                    '-to', str(end),
                     '-i', input_video,
-                    '-c:v', 'libx264', '-crf', '18', '-preset', 'fast',
-                    '-c:a', 'aac',
+                    '-c:v', 'libx264', '-crf', '16', '-preset', 'slow',
+                    '-profile:v', 'high', '-level', '4.2',
+                    '-pix_fmt', 'yuv420p',
+                    '-c:a', 'aac', '-b:a', '192k',
+                    '-movflags', '+faststart',
                     clip_temp_path
                 ]
                 subprocess.run(cut_command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)

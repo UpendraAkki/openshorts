@@ -26,6 +26,11 @@ export interface SubtitleStyle {
 export interface SubtitleConfig {
   captions: CaptionWord[];
   position: SubtitlePosition;
+  /**
+   * Vertical position as a percentage of composition height (0 = top, 100 = bottom).
+   * When provided, overrides the preset `position` anchor.
+   */
+  verticalPosition?: number;
   style: SubtitleStyle;
 }
 
@@ -92,6 +97,7 @@ export const subtitleStyleSchema = z.object({
 export const subtitleConfigSchema = z.object({
   captions: z.array(captionWordSchema),
   position: z.enum(["top", "middle", "bottom"]),
+  verticalPosition: z.number().min(0).max(100).optional(),
   style: subtitleStyleSchema,
 });
 

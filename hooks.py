@@ -220,8 +220,11 @@ def add_hook_to_video(video_path, text, output_path, position="top", font_scale=
             '-i', video_path,
             '-i', img_path,
             '-filter_complex', f"[0:v][1:v]overlay={overlay_x}:{overlay_y}",
-            '-c:a', 'copy',
-            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+            '-c:a', 'aac', '-b:a', '192k',
+            '-c:v', 'libx264', '-preset', 'slow', '-crf', '17',
+            '-profile:v', 'high', '-level', '4.2',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
             output_path
         ]
         

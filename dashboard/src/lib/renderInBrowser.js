@@ -57,7 +57,11 @@ export async function renderInBrowser({
         signal,
     });
 
-    const blob = await getBlob();
+    const rawBlob = await getBlob();
+    // Ensure the blob has a proper MP4 MIME type so downloads and <video> elements work reliably.
+    const blob = rawBlob.type === 'video/mp4'
+        ? rawBlob
+        : new Blob([rawBlob], { type: 'video/mp4' });
     return URL.createObjectURL(blob);
 }
 
