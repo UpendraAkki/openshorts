@@ -1253,8 +1253,12 @@ async def get_social_user(api_key: str = Header(..., alias="X-Upload-Post-Key"))
             return {"profiles": profiles_list}
             
             
+        except HTTPException:
+            # Preserve original HTTP status codes (401/403/etc) instead of masking as 500.
+            raise
         except Exception as e:
-             raise HTTPException(status_code=500, detail=str(e))
+            # Network / parsing / unexpected vendor response
+            raise HTTPException(status_code=502, detail=f"Upload-Post unavailable: {str(e)}")
 
 # --- Thumbnail Studio Endpoints ---
 
