@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Youtube, Upload, FileVideo, X } from 'lucide-react';
+import { Youtube, Upload, FileVideo, X, AlertTriangle, Info } from 'lucide-react';
 
 export default function MediaInput({ onProcess, isProcessing }) {
     const [mode, setMode] = useState('url'); // 'url' | 'file'
     const [url, setUrl] = useState('');
     const [file, setFile] = useState(null);
+
+    // Check if YouTube cookies are configured
+    const hasCookies = !!(localStorage.getItem('youtube_cookies_v1') || '').trim();
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -50,7 +53,7 @@ export default function MediaInput({ onProcess, isProcessing }) {
 
             <form onSubmit={handleSubmit}>
                 {mode === 'url' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <input
                             type="url"
                             value={url}
@@ -59,6 +62,20 @@ export default function MediaInput({ onProcess, isProcessing }) {
                             className="input-field"
                             required
                         />
+                        {hasCookies ? (
+                            <div className="flex items-start gap-2 p-2.5 bg-green-500/5 border border-green-500/20 rounded-xl text-[11px] text-green-400">
+                                <Info size={12} className="mt-0.5 shrink-0" />
+                                <span>YouTube cookies configured — authenticated downloads enabled.</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-start gap-2 p-2.5 bg-amber-500/5 border border-amber-500/20 rounded-xl text-[11px] text-amber-400">
+                                <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                                <span>
+                                    YouTube may block server-side downloads with a bot-detection error.
+                                    {' '}<strong>If that happens</strong>: go to <span className="underline cursor-pointer" onClick={() => window.dispatchEvent(new CustomEvent('openSettings'))}>Settings → YouTube Cookies</span> to configure authentication, or use <strong>Upload File</strong> instead.
+                                </span>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div

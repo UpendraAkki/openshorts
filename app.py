@@ -342,6 +342,11 @@ async def process_endpoint(
     cmd = ["python", "-u", "main.py"] # -u for unbuffered
     env = os.environ.copy()
     env["GEMINI_API_KEY"] = api_key # Override with key from request
+
+    # Pass YouTube cookies if provided (allows authenticated downloads to bypass bot detection)
+    youtube_cookies = request.headers.get("X-Youtube-Cookies")
+    if youtube_cookies and youtube_cookies.strip():
+        env["YOUTUBE_COOKIES"] = youtube_cookies.strip()
     
     if url:
         cmd.extend(["-u", url])
@@ -933,6 +938,65 @@ async def enhance_video(req: EnhanceRequest):
         print(f"⚠️ Failed to update metadata after enhance: {e}")
 
     return {"success": True, "new_video_url": new_video_url}
+
+
+class FixCompatRequest(BaseModel):
+    job_id: str
+    input_filename: str
+
+
+@app.post("/api/videos/fix-compat")
+async def fix_video_compat(req: FixCompatRequest):
+    """
+    Re-encode an existing clip to browser-compatible H.264 (no B-frames, main profile).
+    Required for Remotion web rendering, which needs frame-accurate random-access seeking.
+    Returns the URL of the re-encoded file (stored as compat_<original>).
+    """
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    filename = os.path.basename(req.input_filename)
+    input_path = os.path.join(output_dir, filename)
+
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail=f"Video file not found: {filename}")
+
+    # Already a compat file — nothing to do
+    if filename.startswith("compat_"):
+        return {"success": True, "new_video_url": f"/videos/{req.job_id}/{filename}"}
+
+    output_filename = f"compat_{filename}"
+    output_path = os.path.join(output_dir, output_filename)
+
+    # Skip re-encoding if compat file already exists and is newer than the source
+    if os.path.exists(output_path) and os.path.getmtime(output_path) >= os.path.getmtime(input_path):
+        return {"success": True, "new_video_url": f"/videos/{req.job_id}/{output_filename}"}
+
+    def run_compat():
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '17',
+            # main profile + no B-frames = frame-accurate browser seeking
+            '-profile:v', 'main', '-level', '3.2',
+            '-bf', '0', '-g', '30',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '192k',
+            '-movflags', '+faststart',
+            output_path
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            raise Exception(f"FFmpeg compat re-encode failed: {result.stderr.decode()}")
+
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_compat)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"success": True, "new_video_url": f"/videos/{req.job_id}/{output_filename}"}
 
 
 class HookRequest(BaseModel):

@@ -12,6 +12,8 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
     const videoRef = React.useRef(null);
     const originalVideoUrl = getApiUrl(clip.video_url); // Never changes — used for Remotion previews
     const [currentVideoUrl, setCurrentVideoUrl] = useState(originalVideoUrl);
+    // Browser-compatible URL for Remotion rendering (may differ from originalVideoUrl for old clips with B-frames)
+    const [renderVideoUrl, setRenderVideoUrl] = useState(originalVideoUrl);
 
     const [platforms, setPlatforms] = useState({
         tiktok: true,
@@ -41,6 +43,32 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
 
     // Accumulate Remotion layers across operations
     const [activeLayers, setActiveLayers] = useState({ subtitles: null, hook: null, effects: null });
+
+    /**
+     * Ensure the video is encoded in a browser-compatible format for Remotion rendering.
+     * Old clips may have B-frames (H.264 High profile) which prevent frame-accurate seeking.
+     * Calls /api/videos/fix-compat which re-encodes with no B-frames if needed.
+     * Returns the URL to use for rendering (may be the same or a compat_ variant).
+     */
+    const ensureRenderCompat = async (sourceUrl) => {
+        // blob: URLs are already rendered output — use directly
+        if (sourceUrl.startsWith('blob:')) return sourceUrl;
+        const filename = sourceUrl.split('/').pop();
+        // Already a compat file
+        if (filename.startsWith('compat_')) return sourceUrl;
+        try {
+            const res = await fetch(getApiUrl('/api/videos/fix-compat'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_id: jobId, input_filename: filename })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.new_video_url) return getApiUrl(data.new_video_url);
+            }
+        } catch (_) { /* ignore — fall back to original */ }
+        return sourceUrl;
+    };
 
     // Fetch clip duration from transcript endpoint
     useEffect(() => {
@@ -91,10 +119,14 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
             if (effectsRes.ok) {
                 const data = await effectsRes.json();
                 if (data.effects && data.effects.segments) {
+                    // Ensure the source video is Remotion-decodable (no B-frames)
+                    const compatUrl = await ensureRenderCompat(renderVideoUrl);
+                    if (compatUrl !== renderVideoUrl) setRenderVideoUrl(compatUrl);
+
                     const newLayers = { ...activeLayers, effects: data.effects };
                     setActiveLayers(newLayers);
                     const blobUrl = await renderInBrowser({
-                        videoUrl: originalVideoUrl,
+                        videoUrl: compatUrl,
                         durationInSeconds: clipDuration,
                         subtitles: newLayers.subtitles,
                         hook: newLayers.hook,
@@ -151,13 +183,15 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
         setEditError(null);
         try {
             if (options.remotion) {
+                // Ensure the source video is Remotion-decodable (no B-frames)
+                const compatUrl = await ensureRenderCompat(renderVideoUrl);
+                if (compatUrl !== renderVideoUrl) setRenderVideoUrl(compatUrl);
+
+                const newLayers = { ...activeLayers, subtitles: options.remotion };
+                setActiveLayers(newLayers);
                 try {
-                    // Accumulate layer and render all layers together.
-                    // If browser decode fails, we silently fall back to server subtitles below.
-                    const newLayers = { ...activeLayers, subtitles: options.remotion };
-                    setActiveLayers(newLayers);
                     const blobUrl = await renderInBrowser({
-                        videoUrl: originalVideoUrl,
+                        videoUrl: compatUrl,
                         durationInSeconds: clipDuration,
                         subtitles: newLayers.subtitles,
                         hook: newLayers.hook,
@@ -216,11 +250,14 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
         setEditError(null);
         try {
             if (hookData.remotion) {
-                // Accumulate layer and render all layers together
+                // Ensure the source video is Remotion-decodable (no B-frames)
+                const compatUrl = await ensureRenderCompat(renderVideoUrl);
+                if (compatUrl !== renderVideoUrl) setRenderVideoUrl(compatUrl);
+
                 const newLayers = { ...activeLayers, hook: hookData.remotion };
                 setActiveLayers(newLayers);
                 const blobUrl = await renderInBrowser({
-                    videoUrl: originalVideoUrl,
+                    videoUrl: compatUrl,
                     durationInSeconds: clipDuration,
                     subtitles: newLayers.subtitles,
                     hook: newLayers.hook,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, FileVideo, Sparkles, Youtube, Instagram, Share2, LogOut, ChevronDown, Check, Activity, LayoutDashboard, Settings, PlusCircle, History, Menu, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, Zap } from 'lucide-react';
+import { Upload, FileVideo, Sparkles, Youtube, Instagram, Share2, LogOut, ChevronDown, Check, CheckCircle, Activity, LayoutDashboard, Settings, PlusCircle, History, Menu, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, Zap } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import ResultCard from './components/ResultCard';
@@ -156,6 +156,9 @@ function App() {
   });
 
   const [uploadUserId, setUploadUserId] = useState(() => localStorage.getItem('uploadUserId') || '');
+
+  // YouTube cookies for bot-detection bypass (Netscape format, stored plain — no secrets, just session cookies)
+  const [youtubeCookies, setYoutubeCookies] = useState(() => localStorage.getItem('youtube_cookies_v1') || '');
   const [userProfiles, setUserProfiles] = useState([]); // List of {username, connected: []}
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [jobId, setJobId] = useState(null);
@@ -251,6 +254,10 @@ function App() {
   }, [uploadPostKey, uploadUserId]);
 
   useEffect(() => {
+    localStorage.setItem('youtube_cookies_v1', youtubeCookies);
+  }, [youtubeCookies]);
+
+  useEffect(() => {
     if (elevenLabsKey) {
       localStorage.setItem('elevenLabsKey_v1', encrypt(elevenLabsKey));
     }
@@ -267,6 +274,13 @@ function App() {
       fetchUserProfiles();
     }
   }, [uploadPostKey]);
+
+  // Allow MediaInput's cookie warning link to navigate to settings
+  useEffect(() => {
+    const handler = () => setActiveTab('settings');
+    window.addEventListener('openSettings', handler);
+    return () => window.removeEventListener('openSettings', handler);
+  }, []);
 
   useEffect(() => {
     let interval;
@@ -338,6 +352,7 @@ function App() {
     try {
       let body;
       const headers = { 'X-Gemini-Key': apiKey };
+      if (youtubeCookies.trim()) headers['X-Youtube-Cookies'] = youtubeCookies.trim();
 
       if (data.type === 'url') {
         headers['Content-Type'] = 'application/json';
@@ -350,7 +365,7 @@ function App() {
 
       const res = await fetch(getApiUrl('/api/process'), {
         method: 'POST',
-        headers: data.type === 'url' ? headers : { 'X-Gemini-Key': apiKey },
+        headers: data.type === 'url' ? headers : { 'X-Gemini-Key': apiKey, ...(youtubeCookies.trim() ? { 'X-Youtube-Cookies': youtubeCookies.trim() } : {}) },
         body
       });
 
@@ -718,6 +733,44 @@ function App() {
                     </span>
                   </p>
                 </div>
+              </div>
+
+              {/* YouTube Cookies */}
+              <div className="glass-panel p-6 mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <Youtube size={18} className="text-red-400" /> YouTube Cookies
+                  </h2>
+                  <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-amber-400 uppercase tracking-wider">Needed for bot-restricted videos</span>
+                </div>
+                <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+                  YouTube increasingly blocks server-side downloads with <strong className="text-amber-400">"Sign in to confirm you're not a bot"</strong> errors.
+                  Providing your YouTube cookies lets yt-dlp authenticate and bypass this block.
+                </p>
+                <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl text-xs text-amber-300 mb-4 space-y-1.5">
+                  <p className="font-bold">How to get your YouTube cookies:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-zinc-400">
+                    <li>Install the Chrome extension <strong className="text-white">"Get cookies.txt LOCALLY"</strong> (search Chrome Web Store)</li>
+                    <li>Go to <strong className="text-white">youtube.com</strong> and make sure you're logged in to your Google account</li>
+                    <li>Click the extension icon → select <strong className="text-white">"Export" → "Current Site"</strong></li>
+                    <li>It downloads a <code className="bg-white/10 px-1 rounded">cookies.txt</code> file in Netscape format</li>
+                    <li>Open the file and paste its full contents into the box below</li>
+                  </ol>
+                </div>
+                <textarea
+                  value={youtubeCookies}
+                  onChange={(e) => setYoutubeCookies(e.target.value)}
+                  rows={6}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-xs text-zinc-300 font-mono focus:outline-none focus:border-amber-500/50 resize-none placeholder-zinc-600"
+                  placeholder={'# Netscape HTTP Cookie File\n# Copy & paste the full contents of cookies.txt here\n# Example:\n# .youtube.com  TRUE  /  TRUE  ...  VISITOR_INFO1_LIVE  abc123...'}
+                />
+                {youtubeCookies.trim() ? (
+                  <div className="flex items-center gap-2 mt-2 text-xs text-green-400">
+                    <CheckCircle size={12} /> Cookies saved — YouTube downloads will use authentication
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-zinc-600">Without cookies, YouTube may block downloads. Upload the video file manually as a workaround.</p>
+                )}
               </div>
             </div>
           )}
