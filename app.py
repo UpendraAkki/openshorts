@@ -14,6 +14,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from json import JSONDecodeError
 from pydantic import BaseModel
 from s3_uploader import upload_job_artifacts, list_all_clips, upload_actor_to_s3, list_actor_gallery, upload_video_to_gallery, list_video_gallery
 
@@ -321,8 +322,14 @@ async def process_endpoint(
     # Handle JSON body manually for URL payload
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
-        body = await request.json()
-        url = body.get("url")
+        try:
+            body = await request.json()
+        except JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+        if isinstance(body, dict):
+            url = body.get("url")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
     
     if not url and not file:
         raise HTTPException(status_code=400, detail="Must provide URL or File")
