@@ -9,7 +9,7 @@ from google.genai import types
 class VideoEditor:
     def __init__(self, api_key):
         self.client = genai.Client(api_key=api_key)
-        self.model_name = "gemini-3-flash-preview" 
+        self.model_name = "gemini-2.5-flash"
 
     def upload_video(self, video_path):
         """Uploads video to Gemini File API."""
@@ -341,7 +341,9 @@ class VideoEditor:
             '-i', input_path,
             '-vf', filter_string,
             '-c:v', 'libx264', '-preset', 'slow', '-crf', '17',
-            '-profile:v', 'high', '-level', '4.2',
+            # main profile + no B-frames = frame-accurate browser seeking (required by Remotion)
+            '-profile:v', 'main', '-level', '3.2',
+            '-bf', '0', '-g', '30',
             '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart',
             '-c:a', 'aac', '-b:a', '192k',

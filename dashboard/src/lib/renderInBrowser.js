@@ -50,6 +50,8 @@ export async function renderInBrowser({
         container: 'mp4',
         videoCodec: 'h264',
         audioCodec: 'aac',
+        // High bitrate for crisp 1080x1920 output — prevents WebCodecs pixelation
+        videoBitrateInKbps: 8000,
         onProgress: onProgress
             ? ({ progress }) => onProgress(progress)
             : undefined,

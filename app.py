@@ -882,20 +882,25 @@ async def enhance_video(req: EnhanceRequest):
 
     def run_enhance():
         # Quality enhancement chain:
-        # hqdn3d   – temporal/spatial denoise (removes compression artifacts)
-        # unsharp  – sharpening pass
-        # eq       – contrast/brightness/saturation boost
+        # hqdn3d   – light denoise to remove compression artifacts
+        # unsharp  – strong sharpening for crisp edges
+        # eq       – contrast/saturation/gamma boost for cinematic look
+        # curves   – gentle S-curve for richer blacks and highlights
         vf_chain = (
-            "hqdn3d=1.5:1.5:6:6,"
-            "unsharp=5:5:0.8:5:5:0.4,"
-            "eq=contrast=1.05:brightness=0.02:saturation=1.1"
+            "hqdn3d=1:1:4:4,"
+            "unsharp=5:5:1.5:3:3:0.0,"
+            "eq=contrast=1.12:brightness=0.02:saturation=1.25:gamma=0.95,"
+            "curves=r='0/0 0.45/0.5 1/1':g='0/0 0.5/0.5 1/1':b='0/0 0.5/0.47 1/1'"
         )
         cmd = [
             'ffmpeg', '-y',
             '-i', input_path,
             '-vf', vf_chain,
-            '-c:v', 'libx264', '-preset', 'medium', '-crf', '15',
-            '-profile:v', 'high', '-level', '4.2',
+            '-c:v', 'libx264', '-preset', 'slow', '-crf', '14',
+            # main profile + no B-frames = frame-accurate browser seeking (required by Remotion)
+            '-profile:v', 'main', '-level', '3.2',
+            '-bf', '0',
+            '-g', '30',
             '-pix_fmt', 'yuv420p',
             '-c:a', 'copy',
             '-movflags', '+faststart',

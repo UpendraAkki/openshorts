@@ -29,16 +29,15 @@ load_dotenv()
 ASPECT_RATIO = 9 / 16
 
 GEMINI_PROMPT_TEMPLATE = """
-You are a senior short-form video editor. Read the ENTIRE transcript and word-level timestamps to choose the 3–15 MOST VIRAL moments for TikTok/IG Reels/YouTube Shorts. Each clip must be between 15 and 60 seconds long.
+You are a world-class short-form video strategist and editor who has studied thousands of viral TikTok, Instagram Reel, and YouTube Short videos. Your job is to identify the 3–10 HIGHEST-VIRALITY moments from a transcript and clip them precisely.
 
 ⚠️ FFMPEG TIME CONTRACT — STRICT REQUIREMENTS:
-- Return timestamps in ABSOLUTE SECONDS from the start of the video (usable in: ffmpeg -ss <start> -to <end> -i <input> ...).
-- Only NUMBERS with decimal point, up to 3 decimals (examples: 0, 1.250, 17.350).
+- Return timestamps in ABSOLUTE SECONDS from the start of the video.
+- Only NUMBERS with decimal point, up to 3 decimals (e.g., 0, 1.250, 17.350).
 - Ensure 0 ≤ start < end ≤ VIDEO_DURATION_SECONDS.
 - Each clip between 15 and 60 s (inclusive).
-- Prefer starting 0.2–0.4 s BEFORE the hook and ending 0.2–0.4 s AFTER the payoff.
-- Use silence moments for natural cuts; never cut in the middle of a word or phrase.
-- STRICTLY FORBIDDEN to use time formats other than absolute seconds.
+- Start 0.2–0.4 s BEFORE the hook word/phrase, end 0.2–0.4 s AFTER the payoff.
+- Cut at natural silences or sentence boundaries — NEVER mid-word.
 
 VIDEO_DURATION_SECONDS: {video_duration}
 
@@ -48,20 +47,32 @@ TRANSCRIPT_TEXT (raw):
 WORDS_JSON (array of {{w, s, e}} where s/e are seconds):
 {words_json}
 
-STRICT EXCLUSIONS:
-- No generic intros/outros or purely sponsorship segments unless they contain the hook.
-- No clips < 15 s or > 60 s.
+VIRALITY SCORING CRITERIA — Select clips that score highest on these factors:
+1. 🎣 HOOK POWER (0-10): Does the first 3 seconds make the viewer need to know what happens next?
+   — Best hooks: shocking facts, surprising questions, "POV:", bold claims, controversies, relatable pain points
+2. 💡 VALUE DENSITY (0-10): How much actionable / surprising / entertaining info per second?
+   — Tutorials, hacks, reveals, and "I never knew this" moments score high
+3. 😮 EMOTIONAL PEAK (0-10): Does the clip have a moment of surprise, laughter, awe, or strong emotion?
+4. 🔁 REWATCH FACTOR (0-10): Would someone watch again? Clever edits, dense info, funny moments
+5. 💬 COMMENT TRIGGER (0-10): Does it make people want to agree, disagree, share their own experience?
 
-OUTPUT — RETURN ONLY VALID JSON (no markdown, no comments). Order clips by predicted performance (best to worst). In the descriptions, ALWAYS include a CTA like "Follow me and comment X and I'll send you the workflow" (especially if discussing an n8n workflow):
+STRICT EXCLUSIONS:
+- No generic intros/outros or sponsor reads (unless they contain the viral hook itself)
+- No clips < 15 s or > 60 s
+- Avoid clips with low energy or filler content
+
+OUTPUT — RETURN ONLY VALID JSON (no markdown, no extra keys). Order by predicted virality score (highest first):
 {{
   "shorts": [
     {{
-      "start": <number in seconds, e.g., 12.340>,
-      "end": <number in seconds, e.g., 37.900>,
-      "video_description_for_tiktok": "<description for TikTok oriented to get views>",
-      "video_description_for_instagram": "<description for Instagram oriented to get views>",
-      "video_title_for_youtube_short": "<title for YouTube Short oriented to get views 100 chars max>",
-      "viral_hook_text": "<SHORT punchy text overlay (max 10 words). MUST BE IN THE SAME LANGUAGE AS THE VIDEO TRANSCRIPT. Examples: 'POV: You realized...', 'Did you know?', 'Stop doing this!'>"
+      "start": <number, e.g. 12.340>,
+      "end": <number, e.g. 37.900>,
+      "virality_score": <number 1-10, your overall predicted virality>,
+      "hook_type": "<one of: shocking_fact | question | pov | controversy | tutorial | story | humor | relatable>",
+      "video_description_for_tiktok": "<2-3 sentences optimized for TikTok discovery + engagement. Include a strong CTA like 'Follow for more' or 'Comment below'. Add 5-8 relevant hashtags.>",
+      "video_description_for_instagram": "<2-3 sentences for Instagram. Include a CTA. Add 8-12 hashtags. More polished tone.>",
+      "video_title_for_youtube_short": "<Compelling YouTube Short title, max 100 chars. Use numbers or 'How to' when applicable.>",
+      "viral_hook_text": "<SHORT punchy on-screen text overlay, max 10 words, SAME LANGUAGE as transcript. Examples: 'POV: You just saved 10 hours/week', 'Nobody talks about this...', 'Stop making this mistake!'>"
     }}
   ]
 }}
@@ -632,7 +643,9 @@ def process_video_to_vertical(input_video, final_output_video):
         '-s', f'{OUTPUT_WIDTH}x{OUTPUT_HEIGHT}', '-pix_fmt', 'bgr24',
         '-r', str(fps), '-i', '-', '-c:v', 'libx264',
         '-preset', 'slow', '-crf', '17',
-        '-profile:v', 'high', '-level', '4.2',
+        # main profile + no B-frames = frame-accurate browser seeking (required by Remotion)
+        '-profile:v', 'main', '-level', '3.2',
+        '-bf', '0', '-g', str(int(fps)),
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
         '-an', temp_video_output
@@ -815,8 +828,8 @@ def get_viral_clips(transcript_result, video_duration):
 
     client = genai.Client(api_key=api_key)
     
-    # We use gemini-2.5-flash as requested.
-    model_name = 'gemini-2.5-flash' 
+    # Use gemini-2.5-pro for best virality analysis quality.
+    model_name = 'gemini-2.5-pro'
     
     print(f"🤖  Initializing Gemini with model: {model_name}")
 
@@ -846,12 +859,11 @@ def get_viral_clips(transcript_result, video_duration):
         try:
             usage = response.usage_metadata
             if usage:
-                # Gemini 2.5 Flash Pricing (Dec 2025)
-                # Input: $0.10 per 1M tokens
-                # Output: $0.40 per 1M tokens
-                
-                input_price_per_million = 0.10
-                output_price_per_million = 0.40
+                # Gemini 2.5 Pro Pricing
+                # Input: $1.25 per 1M tokens (<=200k), $2.50 above
+                # Output: $10.00 per 1M tokens
+                input_price_per_million = 1.25
+                output_price_per_million = 10.00
                 
                 prompt_tokens = usage.prompt_token_count
                 output_tokens = usage.candidates_token_count
@@ -1006,7 +1018,9 @@ if __name__ == '__main__':
                     '-to', str(end),
                     '-i', input_video,
                     '-c:v', 'libx264', '-crf', '16', '-preset', 'slow',
-                    '-profile:v', 'high', '-level', '4.2',
+                    # main profile + no B-frames = frame-accurate browser seeking (required by Remotion)
+                    '-profile:v', 'main', '-level', '3.2',
+                    '-bf', '0', '-g', '30',
                     '-pix_fmt', 'yuv420p',
                     '-c:a', 'aac', '-b:a', '192k',
                     '-movflags', '+faststart',
