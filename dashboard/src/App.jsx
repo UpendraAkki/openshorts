@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, FileVideo, Sparkles, Youtube, Instagram, Share2, LogOut, ChevronDown, Check, Activity, LayoutDashboard, Settings, PlusCircle, History, Menu, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, FileVideo, Sparkles, Youtube, Instagram, Share2, LogOut, ChevronDown, Check, Activity, LayoutDashboard, Settings, PlusCircle, History, Menu, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, Zap } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import ResultCard from './components/ResultCard';
@@ -168,6 +168,11 @@ function App() {
 
   const [sessionRecovered, setSessionRecovered] = useState(false);
   const [showScheduleWeek, setShowScheduleWeek] = useState(false);
+
+  // Enhance All state
+  const [isEnhancingAll, setIsEnhancingAll] = useState(false);
+  const [enhanceProgress, setEnhanceProgress] = useState({ current: 0, total: 0 });
+  const enhanceAbortRef = useRef(false);
 
   // Sync state for original video playback
   const [syncedTime, setSyncedTime] = useState(0);
@@ -366,6 +371,41 @@ function App() {
     setLogs([]);
     setProcessingMedia(null);
     localStorage.removeItem(SESSION_KEY);
+  };
+
+  const handleEnhanceAll = async () => {
+    if (!results?.clips?.length || !jobId) return;
+    setIsEnhancingAll(true);
+    enhanceAbortRef.current = false;
+    const clips = results.clips;
+    setEnhanceProgress({ current: 0, total: clips.length });
+
+    for (let i = 0; i < clips.length; i++) {
+      if (enhanceAbortRef.current) break;
+      setEnhanceProgress({ current: i + 1, total: clips.length });
+      try {
+        const filename = clips[i].video_url?.split('/').pop();
+        const res = await fetch(getApiUrl(`/api/enhance`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: jobId, clip_index: i, input_filename: filename }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.new_video_url) {
+            setResults(prev => {
+              const newClips = [...prev.clips];
+              newClips[i] = { ...newClips[i], video_url: data.new_video_url };
+              return { ...prev, clips: newClips };
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`Enhance clip ${i} failed:`, e);
+      }
+    }
+    setIsEnhancingAll(false);
+    setEnhanceProgress({ current: 0, total: 0 });
   };
 
   // --- UI Components ---
@@ -797,14 +837,29 @@ function App() {
                       ${results.cost_analysis.total_cost.toFixed(5)}
                     </span>
                   )}
-                  {results?.clips?.length > 1 && status === 'complete' && (
-                    <button
-                      onClick={() => setShowScheduleWeek(true)}
-                      className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 hover:from-purple-500/30 hover:to-indigo-500/30 border border-purple-500/30 text-purple-300 hover:text-purple-200 rounded-full text-xs font-bold transition-all"
-                    >
-                      <Calendar size={14} />
-                      Programar Semana
-                    </button>
+                  {results?.clips?.length > 0 && status === 'complete' && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={handleEnhanceAll}
+                        disabled={isEnhancingAll}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-500/20 to-blue-500/20 hover:from-sky-500/30 hover:to-blue-500/30 border border-sky-500/30 text-sky-300 hover:text-sky-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-full text-xs font-bold transition-all"
+                        title="Enhance quality of all clips sequentially"
+                      >
+                        <Zap size={13} className={isEnhancingAll ? 'animate-pulse' : ''} />
+                        {isEnhancingAll
+                          ? `Enhancing ${enhanceProgress.current}/${enhanceProgress.total}...`
+                          : 'Enhance All'}
+                      </button>
+                      {results.clips.length > 1 && (
+                        <button
+                          onClick={() => setShowScheduleWeek(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 hover:from-purple-500/30 hover:to-indigo-500/30 border border-purple-500/30 text-purple-300 hover:text-purple-200 rounded-full text-xs font-bold transition-all"
+                        >
+                          <Calendar size={14} />
+                          Programar Semana
+                        </button>
+                      )}
+                    </div>
                   )}
                 </h2>
 

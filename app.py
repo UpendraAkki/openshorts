@@ -830,6 +830,99 @@ async def add_subtitles(req: SubtitleRequest):
         "new_video_url": f"/videos/{req.job_id}/{output_filename}"
     }
 
+class EnhanceRequest(BaseModel):
+    job_id: str
+    clip_index: int
+    input_filename: Optional[str] = None
+
+
+@app.post("/api/enhance")
+async def enhance_video(req: EnhanceRequest):
+    """Enhance video quality using FFmpeg filters: denoise + sharpen + color boost."""
+    if req.job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[req.job_id]
+    output_dir = os.path.join(OUTPUT_DIR, req.job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], 'r') as f:
+        data = json.load(f)
+
+    clips = data.get('shorts', [])
+    if req.clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    clip_data = clips[req.clip_index]
+
+    if req.input_filename:
+        filename = os.path.basename(req.input_filename)
+    else:
+        filename = clip_data.get('video_url', '').split('/')[-1]
+        if not filename:
+            base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
+            filename = f"{base_name}_clip_{req.clip_index + 1}.mp4"
+
+    input_path = os.path.join(output_dir, filename)
+    if not os.path.exists(input_path):
+        raise HTTPException(status_code=404, detail=f"Video file not found: {input_path}")
+
+    output_filename = f"enhanced_{filename}"
+    output_path = os.path.join(output_dir, output_filename)
+
+    def run_enhance():
+        # Quality enhancement chain:
+        # hqdn3d   – temporal/spatial denoise (removes compression artifacts)
+        # unsharp  – sharpening pass
+        # eq       – contrast/brightness/saturation boost
+        vf_chain = (
+            "hqdn3d=1.5:1.5:6:6,"
+            "unsharp=5:5:0.8:5:5:0.4,"
+            "eq=contrast=1.05:brightness=0.02:saturation=1.1"
+        )
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-vf', vf_chain,
+            '-c:v', 'libx264', '-preset', 'medium', '-crf', '15',
+            '-profile:v', 'high', '-level', '4.2',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'copy',
+            '-movflags', '+faststart',
+            output_path
+        ]
+        print(f"✨ Enhancing video: {' '.join(cmd)}")
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            raise Exception(f"FFmpeg enhance failed: {result.stderr.decode()}")
+
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_enhance)
+    except Exception as e:
+        print(f"❌ Enhance Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    new_video_url = f"/videos/{req.job_id}/{output_filename}"
+
+    # Update in-memory and on-disk state
+    if req.clip_index < len(job['result']['clips']):
+        job['result']['clips'][req.clip_index]['video_url'] = new_video_url
+    try:
+        if req.clip_index < len(clips):
+            clips[req.clip_index]['video_url'] = new_video_url
+            data['shorts'] = clips
+            with open(json_files[0], 'w') as f:
+                json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Failed to update metadata after enhance: {e}")
+
+    return {"success": True, "new_video_url": new_video_url}
+
+
 class HookRequest(BaseModel):
     job_id: str
     clip_index: int

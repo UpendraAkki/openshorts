@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Share2, Instagram, Youtube, Video, CheckCircle, AlertCircle, X, Loader2, Copy, Wand2, Type, Calendar, Clock, Languages, Maximize2, Minimize2, ChevronDown, ChevronUp, Play } from 'lucide-react';
+import { Download, Share2, Instagram, Youtube, Video, CheckCircle, AlertCircle, X, Loader2, Copy, Wand2, Type, Calendar, Clock, Languages, Maximize2, Minimize2, ChevronDown, ChevronUp, Play, Zap } from 'lucide-react';
 import { getApiUrl } from '../config';
 import SubtitleModal from './SubtitleModal';
 import HookModal from './HookModal';
@@ -30,6 +30,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
     const [isSubtitling, setIsSubtitling] = useState(false);
     const [isHooking, setIsHooking] = useState(false);
     const [isTranslating, setIsTranslating] = useState(false);
+    const [isEnhancing, setIsEnhancing] = useState(false);
     const [showHookModal, setShowHookModal] = useState(false);
     const [showTranslateModal, setShowTranslateModal] = useState(false);
     const [editError, setEditError] = useState(null);
@@ -327,6 +328,43 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
         }
     };
 
+    const handleEnhance = async () => {
+        setIsEnhancing(true);
+        setEditError(null);
+        try {
+            const currentFilename = currentVideoUrl?.split('/').pop();
+            const originalFilename = clip?.video_url?.split('/').pop();
+            const inputFilename = currentVideoUrl?.startsWith('blob:')
+                ? originalFilename
+                : (currentFilename || originalFilename);
+
+            const res = await fetch(getApiUrl('/api/enhance'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    job_id: jobId,
+                    clip_index: index,
+                    input_filename: inputFilename,
+                })
+            });
+            if (!res.ok) {
+                const err = await res.text();
+                try { throw new Error(JSON.parse(err).detail || err); }
+                catch (e) { if (e.message !== err) throw e; throw new Error(err); }
+            }
+            const data = await res.json();
+            if (data.new_video_url) {
+                setCurrentVideoUrl(getApiUrl(data.new_video_url));
+                if (videoRef.current) videoRef.current.load();
+            }
+        } catch (e) {
+            setEditError(e.message);
+            setTimeout(() => setEditError(null), 5000);
+        } finally {
+            setIsEnhancing(false);
+        }
+    };
+
     const handlePost = async () => {
         if (!uploadPostKey || !uploadUserId) {
             setPostResult({ success: false, msg: "Missing API Key or User ID." });
@@ -531,6 +569,15 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                     >
                         {isTranslating ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
                         {isTranslating ? 'Translating...' : 'Dub Voice'}
+                    </button>
+
+                    <button
+                        onClick={handleEnhance}
+                        disabled={isEnhancing}
+                        className="col-span-1 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-sky-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mb-1 truncate px-1"
+                    >
+                        {isEnhancing ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                        {isEnhancing ? 'Enhancing...' : 'Enhance'}
                     </button>
 
                     <button

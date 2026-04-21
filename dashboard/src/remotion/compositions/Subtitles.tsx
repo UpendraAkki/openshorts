@@ -15,34 +15,34 @@ interface SubtitlesProps {
   config: SubtitleConfig;
 }
 
-const POSITION_MAP: Record<string, React.CSSProperties> = {
-  top: { top: "12%", bottom: "auto" },
-  middle: { top: "45%", bottom: "auto" },
-  bottom: { bottom: "10%", top: "auto" },
-};
-
 const getPositionStyle = (
   position: string,
   verticalPosition?: number
 ): React.CSSProperties => {
-  // If a custom vertical position is provided, use it and anchor by translateY(-50%)
   if (typeof verticalPosition === "number") {
-    const clamped = Math.min(100, Math.max(0, verticalPosition));
+    const clamped = Math.min(95, Math.max(5, verticalPosition));
     return {
       top: `${clamped}%`,
       bottom: "auto",
       transform: "translateY(-50%)",
     };
   }
+  const POSITION_MAP: Record<string, React.CSSProperties> = {
+    top: { top: "10%", bottom: "auto" },
+    middle: { top: "50%", bottom: "auto", transform: "translateY(-50%)" },
+    bottom: { bottom: "12%", top: "auto" },
+  };
   return POSITION_MAP[position] ?? POSITION_MAP.bottom;
 };
 
 export const Subtitles: React.FC<SubtitlesProps> = ({ config }) => {
   const { fps } = useVideoConfig();
-  const blocks = groupCaptionsIntoBlocks(config.captions);
+  // Fewer words per block = more TikTok-like
+  const maxChars = config.style.maxCharsPerBlock ?? 14;
+  const blocks = groupCaptionsIntoBlocks(config.captions, maxChars);
 
   return (
-    <AbsoluteFill>
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
       {blocks.map((block, i) => {
         const startFrame = Math.round((block.startMs / 1000) * fps);
         const durationFrames = Math.max(
@@ -84,12 +84,21 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
   const { fps } = useVideoConfig();
   const { style, position } = config;
 
-  // Current time relative to composition start (sequence-relative frame)
   const currentTimeMs = blockStartMs + (frame / fps) * 1000;
   const activeIndex = getActiveWordIndex(block.words, currentTimeMs);
 
   const positionStyle = getPositionStyle(position, config.verticalPosition);
   const fontStack = getFontStack(style.fontFamily);
+
+  // Block entrance animation – quick scale-in
+  const blockEntrance = spring({
+    frame,
+    fps,
+    config: { mass: 0.4, stiffness: 280, damping: 18 },
+    durationInFrames: 8,
+  });
+  const blockScale = interpolate(blockEntrance, [0, 1], [0.85, 1]);
+  const blockOpacity = interpolate(blockEntrance, [0, 1], [0, 1]);
 
   // Background box style
   const hasBg = style.bgOpacity > 0;
@@ -98,8 +107,8 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
         backgroundColor: `${style.bgColor}${Math.round(style.bgOpacity * 255)
           .toString(16)
           .padStart(2, "0")}`,
-        borderRadius: 8,
-        padding: "8px 16px",
+        borderRadius: 12,
+        padding: "10px 20px",
       }
     : {};
 
@@ -111,7 +120,10 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
         right: 0,
         display: "flex",
         justifyContent: "center",
+        alignItems: "center",
         ...positionStyle,
+        transform: `${positionStyle.transform ?? ""} scale(${blockScale})`,
+        opacity: blockOpacity,
       }}
     >
       <div
@@ -120,10 +132,9 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
           flexWrap: "wrap",
           justifyContent: "center",
           alignItems: "center",
-          columnGap: 0,
-          rowGap: `${Math.max(4, style.fontSize * 0.14)}px`,
-          maxWidth: "85%",
-          lineHeight: 1.25,
+          gap: `${Math.max(4, style.fontSize * 0.12)}px`,
+          maxWidth: "88%",
+          lineHeight: 1.2,
           ...bgStyle,
         }}
       >
@@ -139,7 +150,6 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
             fps={fps}
             wordStartMs={word.startMs}
             blockStartMs={blockStartMs}
-            isLast={i === block.words.length - 1}
           />
         ))}
       </div>
@@ -157,7 +167,6 @@ interface WordSpanProps {
   fps: number;
   wordStartMs: number;
   blockStartMs: number;
-  isLast: boolean;
 }
 
 const WordSpan: React.FC<WordSpanProps> = ({
@@ -170,7 +179,6 @@ const WordSpan: React.FC<WordSpanProps> = ({
   fps,
   wordStartMs,
   blockStartMs,
-  isLast,
 }) => {
   const wordStartFrame = Math.round(
     ((wordStartMs - blockStartMs) / 1000) * fps
@@ -185,13 +193,13 @@ const WordSpan: React.FC<WordSpanProps> = ({
 
     switch (animation) {
       case "pop": {
-        const scale = spring({
+        const progress = spring({
           frame: frame - wordStartFrame,
           fps,
-          config: { mass: 0.5, stiffness: 300, damping: 12 },
-          durationInFrames: 10,
+          config: { mass: 0.35, stiffness: 380, damping: 14 },
+          durationInFrames: 12,
         });
-        const scaleValue = interpolate(scale, [0, 1], [1, 1.25]);
+        const scaleValue = interpolate(progress, [0, 1], [0.7, 1.22]);
         transform = `scale(${scaleValue})`;
         break;
       }
@@ -199,15 +207,28 @@ const WordSpan: React.FC<WordSpanProps> = ({
         extraStyle = {
           backgroundColor: style.highlightColor,
           color: style.bgColor || "#000000",
-          borderRadius: 4,
-          padding: "2px 6px",
+          borderRadius: 6,
+          padding: "3px 8px",
+          marginLeft: "-3px",
+          marginRight: "-3px",
         };
         break;
       }
       case "word-highlight": {
         extraStyle = {
-          textShadow: `0 0 12px ${style.highlightColor}, 0 0 24px ${style.highlightColor}40`,
+          textShadow: `0 0 16px ${style.highlightColor}, 0 0 32px ${style.highlightColor}60`,
         };
+        break;
+      }
+      case "bounce": {
+        const progress = spring({
+          frame: frame - wordStartFrame,
+          fps,
+          config: { mass: 0.5, stiffness: 500, damping: 10 },
+          durationInFrames: 14,
+        });
+        const yOffset = interpolate(progress, [0, 1], [12, 0]);
+        transform = `translateY(${yOffset}px) scale(1.18)`;
         break;
       }
       default:
@@ -215,40 +236,48 @@ const WordSpan: React.FC<WordSpanProps> = ({
     }
   }
 
-  // Text stroke via textShadow (CSS paint-order not reliable in Remotion)
+  // Build text stroke from 8-direction shadows for clean thick outline
+  const bw = style.borderWidth;
+  const bc = style.borderColor;
   const strokeShadow =
-    style.borderWidth > 0
+    bw > 0
       ? [
-          `${style.borderWidth}px 0 0 ${style.borderColor}`,
-          `-${style.borderWidth}px 0 0 ${style.borderColor}`,
-          `0 ${style.borderWidth}px 0 ${style.borderColor}`,
-          `0 -${style.borderWidth}px 0 ${style.borderColor}`,
+          `${bw}px ${bw}px 0 ${bc}`,
+          `-${bw}px ${bw}px 0 ${bc}`,
+          `${bw}px -${bw}px 0 ${bc}`,
+          `-${bw}px -${bw}px 0 ${bc}`,
+          `${bw * 1.5}px 0 0 ${bc}`,
+          `-${bw * 1.5}px 0 0 ${bc}`,
+          `0 ${bw * 1.5}px 0 ${bc}`,
+          `0 -${bw * 1.5}px 0 ${bc}`,
         ].join(", ")
       : "none";
+
+  const finalTextShadow =
+    animation !== "karaoke"
+      ? [strokeShadow, extraStyle.textShadow].filter(Boolean).join(", ")
+      : strokeShadow;
+
+  const displayWord = style.uppercase ? word.toUpperCase() : word;
 
   return (
     <span
       style={{
         fontFamily: fontStack,
         fontSize: style.fontSize,
-        fontWeight: 800,
+        fontWeight: 900,
         lineHeight: 1.15,
-        letterSpacing: "0.01em",
+        letterSpacing: style.uppercase ? "0.04em" : "0.01em",
         color: animation === "karaoke" && isActive ? undefined : color,
-        textShadow:
-          animation !== "karaoke"
-            ? [strokeShadow, extraStyle.textShadow].filter(Boolean).join(", ")
-            : strokeShadow,
+        textShadow: finalTextShadow,
         transform,
         display: "inline-block",
-        transformOrigin: "center center",
-        transition: "none",
+        transformOrigin: "center bottom",
         whiteSpace: "nowrap",
-        marginRight: isLast ? 0 : "0.34em",
         ...extraStyle,
       }}
     >
-      {word}
+      {displayWord}
     </span>
   );
 };

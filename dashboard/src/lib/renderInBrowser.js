@@ -49,7 +49,6 @@ export async function renderInBrowser({
         },
         container: 'mp4',
         videoCodec: 'h264',
-        videoBitrate: 'high',
         audioCodec: 'aac',
         onProgress: onProgress
             ? ({ progress }) => onProgress(progress)

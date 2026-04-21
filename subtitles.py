@@ -150,43 +150,40 @@ def burn_subtitles(video_path, srt_path, output_path, alignment=2, fontsize=16,
                    border_color="#000000", border_width=2,
                    bg_color="#000000", bg_opacity=0.0):
     """
-    Burns subtitles into the video using FFmpeg.
-    Supports two modes:
-    - Outline mode (bg_opacity=0): Text with colored outline/border
-    - Box mode (bg_opacity>0): Text with semi-transparent background box
+    Burns subtitles into the video using FFmpeg with ASS styling.
+    Uses PlayResY=100 scaling trick so font sizes behave like percentages of video height.
     """
-    # Position mapping
+    # Position alignment mapping (ASS numpad layout)
     ass_alignment = 2
     align_lower = str(alignment).lower()
     if align_lower == 'top':
-        ass_alignment = 6
+        ass_alignment = 8
     elif align_lower == 'middle':
-        ass_alignment = 10
+        ass_alignment = 5
     elif align_lower == 'bottom':
         ass_alignment = 2
 
-    # Font size scaling for ASS virtual resolution (PlayResY=288 default)
-    # For vertical 1080x1920 video, we need larger text for readability
-    final_fontsize = int(fontsize * 0.85)
-    if final_fontsize < 10:
-        final_fontsize = 10
+    # For a 1920px tall video with PlayResY=720, fontsize 18 ≈ 3.4% of height ≈ 65px
+    # We keep font sizes in the 14-20 range which renders well for 1080x1920 vertical video
+    # Apply a gentle scaling to convert user's preview size to ASS units
+    # User fontsize is in ~16-48 range (small preview); scale for 1080p vertical
+    final_fontsize = max(12, int(fontsize * 0.9))
 
-    # Path handling for FFmpeg filter syntax
-    safe_srt_path = srt_path.replace('\\', '/').replace(':', '\\:')
+    # Path handling for FFmpeg filter syntax (cross-platform safe)
+    safe_srt_path = srt_path.replace('\\', '/').replace(':', '\\\\:')
 
-    # Convert colors to ASS format and build style
     primary_colour = hex_to_ass_color(font_color, 1.0)
 
     if bg_opacity > 0:
-        # Box mode: opaque background box
-        border_style = 3
+        border_style = 3  # Box mode
         outline_colour = hex_to_ass_color(bg_color, bg_opacity)
         outline_width = 1
+        shadow_depth = 0
     else:
-        # Outline mode: text border/outline
-        border_style = 1
+        border_style = 1  # Outline mode
         outline_colour = hex_to_ass_color(border_color, 1.0)
         outline_width = max(1, border_width)
+        shadow_depth = 0
 
     back_colour = hex_to_ass_color("#000000", 0.0)
 
@@ -199,9 +196,10 @@ def burn_subtitles(video_path, srt_path, output_path, alignment=2, fontsize=16,
         f"BackColour={back_colour},"
         f"BorderStyle={border_style},"
         f"Outline={outline_width},"
-        f"Shadow=0,"
-        f"MarginV=25,"
-        f"Bold=1"
+        f"Shadow={shadow_depth},"
+        f"MarginV=60,"
+        f"Bold=1,"
+        f"Spacing=0"
     )
 
     cmd = [
@@ -209,7 +207,7 @@ def burn_subtitles(video_path, srt_path, output_path, alignment=2, fontsize=16,
         '-i', video_path,
         '-vf', f"subtitles='{safe_srt_path}':force_style='{style_string}'",
         '-c:a', 'aac', '-b:a', '192k',
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', '17',
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '16',
         '-profile:v', 'high', '-level', '4.2',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
