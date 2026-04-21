@@ -352,7 +352,11 @@ function App() {
     try {
       let body;
       const headers = { 'X-Gemini-Key': apiKey };
-      if (youtubeCookies.trim()) headers['X-Youtube-Cookies'] = youtubeCookies.trim();
+      // Cookies are multi-line (Netscape format) — must be base64-encoded for headers
+      if (youtubeCookies.trim()) {
+        try { headers['X-Youtube-Cookies-B64'] = btoa(unescape(encodeURIComponent(youtubeCookies.trim()))); }
+        catch (_) { /* ignore encoding errors */ }
+      }
 
       if (data.type === 'url') {
         headers['Content-Type'] = 'application/json';
@@ -363,9 +367,16 @@ function App() {
         body = formData;
       }
 
+      // For file uploads, omit Content-Type so fetch sets multipart/form-data boundary automatically
+      const fetchHeaders = data.type === 'url' ? headers : (() => {
+        const h = { ...headers };
+        delete h['Content-Type'];
+        return h;
+      })();
+
       const res = await fetch(getApiUrl('/api/process'), {
         method: 'POST',
-        headers: data.type === 'url' ? headers : { 'X-Gemini-Key': apiKey, ...(youtubeCookies.trim() ? { 'X-Youtube-Cookies': youtubeCookies.trim() } : {}) },
+        headers: fetchHeaders,
         body
       });
 

@@ -344,9 +344,14 @@ async def process_endpoint(
     env["GEMINI_API_KEY"] = api_key # Override with key from request
 
     # Pass YouTube cookies if provided (allows authenticated downloads to bypass bot detection)
-    youtube_cookies = request.headers.get("X-Youtube-Cookies")
-    if youtube_cookies and youtube_cookies.strip():
-        env["YOUTUBE_COOKIES"] = youtube_cookies.strip()
+    # Cookies are base64-encoded on the frontend to avoid invalid-header-value errors (Netscape format has newlines)
+    youtube_cookies_b64 = request.headers.get("X-Youtube-Cookies-B64")
+    if youtube_cookies_b64 and youtube_cookies_b64.strip():
+        try:
+            import base64
+            env["YOUTUBE_COOKIES"] = base64.b64decode(youtube_cookies_b64.strip()).decode("utf-8")
+        except Exception as _ce:
+            print(f"⚠️ Could not decode YouTube cookies header: {_ce}")
     
     if url:
         cmd.extend(["-u", url])
