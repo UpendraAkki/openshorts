@@ -402,7 +402,7 @@ async def get_status(job_id: str):
     }
 
 from editor import VideoEditor
-from subtitles import generate_srt, burn_subtitles, generate_srt_from_video
+from subtitles import generate_srt, burn_subtitles, generate_srt_from_video, extract_clip_captions
 from hooks import add_hook_to_video
 from translate import translate_video, get_supported_languages
 from thumbnail import analyze_video_for_titles, refine_titles, generate_thumbnail, generate_youtube_description
@@ -577,17 +577,26 @@ async def get_clip_transcript(job_id: str, clip_index: int):
     clip_start = clip_data.get('start', 0)
     clip_end = clip_data.get('end', 0)
 
-    # Extract words within clip range and convert to CaptionWord format
-    captions = []
-    for segment in transcript.get('segments', []):
-        for word_info in segment.get('words', []):
-            if word_info['end'] > clip_start and word_info['start'] < clip_end:
-                captions.append({
-                    "text": word_info.get('word', '').strip(),
-                    "startMs": int((max(0, word_info['start'] - clip_start)) * 1000),
-                    "endMs": int((max(0, word_info['end'] - clip_start)) * 1000),
-                })
+    # Fast path: precomputed at job time (avoids scanning full transcript JSON)
+    pre = data.get("clip_captions")
+    if (
+        isinstance(pre, list)
+        and len(pre) > clip_index
+        and isinstance(pre[clip_index], dict)
+    ):
+        entry = pre[clip_index]
+        caps = entry.get("captions")
+        if isinstance(caps, list) and len(caps) > 0:
+            duration_sec = float(
+                entry.get("durationSec", max(0.0, clip_end - clip_start))
+            )
+            return {
+                "captions": caps,
+                "durationSec": duration_sec,
+                "language": transcript.get("language", "en"),
+            }
 
+    captions = extract_clip_captions(transcript, clip_start, clip_end)
     duration_sec = clip_end - clip_start
 
     return {

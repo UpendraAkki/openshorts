@@ -789,6 +789,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                 jobId={jobId}
                 clipIndex={index}
                 existingHook={activeLayers.hook}
+                existingEffects={activeLayers.effects}
             />
 
             <HookModal
@@ -800,6 +801,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                 initialText={clip.viral_hook_text}
                 durationInSeconds={clip.end && clip.start ? clip.end - clip.start : 30}
                 existingSubtitles={activeLayers.subtitles}
+                existingEffects={activeLayers.effects}
             />
 
             <TranslateModal

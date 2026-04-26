@@ -236,27 +236,22 @@ const WordSpan: React.FC<WordSpanProps> = ({
     }
   }
 
-  // Build text stroke from 8-direction shadows for clean thick outline
+  // Outline: @remotion/web-renderer emulates CSS to canvas — heavy multi-shadow
+  // often disappears in the exported file. Prefer -webkit-text-stroke (documented as supported).
   const bw = style.borderWidth;
   const bc = style.borderColor;
-  const strokeShadow =
-    bw > 0
-      ? [
-          `${bw}px ${bw}px 0 ${bc}`,
-          `-${bw}px ${bw}px 0 ${bc}`,
-          `${bw}px -${bw}px 0 ${bc}`,
-          `-${bw}px -${bw}px 0 ${bc}`,
-          `${bw * 1.5}px 0 0 ${bc}`,
-          `-${bw * 1.5}px 0 0 ${bc}`,
-          `0 ${bw * 1.5}px 0 ${bc}`,
-          `0 -${bw * 1.5}px 0 ${bc}`,
-        ].join(", ")
-      : "none";
-
+  const hasOutline = bw > 0;
+  const strokeW = Math.min(Math.max(bw, 0.5), 5);
+  const outlineStyle: React.CSSProperties =
+    hasOutline && animation !== "karaoke"
+      ? { WebkitTextStroke: `${strokeW}px ${bc}`, paintOrder: "stroke fill" }
+      : hasOutline && animation === "karaoke" && !isActive
+        ? { WebkitTextStroke: `${Math.min(strokeW, 3)}px ${bc}`, paintOrder: "stroke fill" }
+        : {};
   const finalTextShadow =
-    animation !== "karaoke"
-      ? [strokeShadow, extraStyle.textShadow].filter(Boolean).join(", ")
-      : strokeShadow;
+    animation === "word-highlight" && isActive
+      ? (extraStyle.textShadow as string) || "none"
+      : "none";
 
   const displayWord = style.uppercase ? word.toUpperCase() : word;
 
@@ -270,6 +265,7 @@ const WordSpan: React.FC<WordSpanProps> = ({
         letterSpacing: style.uppercase ? "0.04em" : "0.01em",
         color: animation === "karaoke" && isActive ? undefined : color,
         textShadow: finalTextShadow,
+        ...outlineStyle,
         transform,
         display: "inline-block",
         transformOrigin: "center bottom",

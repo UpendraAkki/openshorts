@@ -69,7 +69,7 @@ const STYLE_PRESETS = [
     },
 ];
 
-export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessing, videoUrl, jobId, clipIndex, existingHook }) {
+export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessing, videoUrl, jobId, clipIndex, existingHook, existingEffects = null }) {
     const [position, setPosition] = useState('bottom');
     const [verticalPosition, setVerticalPosition] = useState(80);
     const [fontSize, setFontSize] = useState(52);
@@ -217,6 +217,7 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
                             durationInSeconds={durationSec}
                             subtitles={subtitleConfig}
                             hook={existingHook || null}
+                            effects={existingEffects || null}
                         />
                     ) : (
                         <>
@@ -485,7 +486,7 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
                             position, fontSize, fontName, fontColor, borderColor, borderWidth, bgColor, bgOpacity,
                             remotion: useRemotionPreview ? subtitleConfig : null,
                         })}
-                        disabled={isProcessing}
+                        disabled={isProcessing || captionsLoading || (useRemotionPreview && captions.length === 0)}
                         className="w-full py-3 mt-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shrink-0"
                     >
                         {isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Type size={20} />}

@@ -19,6 +19,8 @@ from google import genai
 from dotenv import load_dotenv
 import json
 
+from subtitles import build_per_clip_captions_metadata
+
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf')
 
@@ -776,9 +778,12 @@ def process_video_to_vertical(input_video, final_output_video):
 def transcribe_video(video_path):
     print("🎙️  Transcribing video with Faster-Whisper (CPU Optimized)...")
     from faster_whisper import WhisperModel
-    
-    # Run on CPU with INT8 quantization for speed
-    model = WhisperModel("base", device="cpu", compute_type="int8")
+
+    # `tiny`/`base`/`small` — set FASTER_WHISPER_MODEL for faster iteration (e.g. tiny)
+    model_name = os.environ.get("FASTER_WHISPER_MODEL", "base").strip() or "base"
+    compute_type = os.environ.get("FASTER_WHISPER_COMPUTE_TYPE", "int8").strip() or "int8"
+    print(f"   Model: {model_name}, compute_type: {compute_type}")
+    model = WhisperModel(model_name, device="cpu", compute_type=compute_type)
     
     segments, info = model.transcribe(video_path, word_timestamps=True)
     
@@ -993,6 +998,9 @@ if __name__ == '__main__':
             
             # Save metadata
             clips_data['transcript'] = transcript # Save full transcript for subtitles
+            clips_data['clip_captions'] = build_per_clip_captions_metadata(
+                transcript, clips_data.get('shorts', [])
+            )
             metadata_file = os.path.join(output_dir, f"{video_title}_metadata.json")
             with open(metadata_file, 'w') as f:
                 json.dump(clips_data, f, indent=2)

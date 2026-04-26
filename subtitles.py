@@ -223,3 +223,66 @@ def burn_subtitles(video_path, srt_path, output_path, alignment=2, fontsize=16,
 
     return True
 
+
+def _caption_word_to_remotion(word_info, clip_start, clip_end, min_word_ms=50):
+    """
+    One word -> Remotion {text, startMs, endMs} relative to clip start.
+    Clamps to clip range and enforces a minimum duration for stable highlighting.
+    """
+    raw = (word_info.get("word") or "").strip()
+    w_start = float(word_info.get("start", 0))
+    w_end = float(word_info.get("end", w_start))
+    start = max(0.0, w_start - clip_start)
+    end = max(start, w_end - clip_start)
+    clip_len = max(0.0, float(clip_end) - float(clip_start))
+    if clip_len > 0:
+        end = min(end, clip_len)
+    start = min(start, end)
+    start_ms = int(round(start * 1000))
+    end_ms = int(round(end * 1000))
+    if end_ms - start_ms < min_word_ms:
+        end_ms = start_ms + min_word_ms
+    return {"text": raw, "startMs": start_ms, "endMs": end_ms}
+
+
+def extract_clip_captions(transcript, clip_start, clip_end):
+    """
+    Build word-level caption list for one clip (times relative to clip t=0).
+    Used by API and for precomputed metadata (clip_captions).
+    """
+    captions = []
+    if not transcript or not transcript.get("segments"):
+        return captions
+    cs, ce = float(clip_start), float(clip_end)
+    for segment in transcript["segments"]:
+        for word_info in segment.get("words") or []:
+            try:
+                w_end = float(word_info.get("end", 0))
+                w_start = float(word_info.get("start", 0))
+            except (TypeError, ValueError):
+                continue
+            if w_end > cs and w_start < ce:
+                captions.append(_caption_word_to_remotion(word_info, cs, ce))
+    return captions
+
+
+def build_per_clip_captions_metadata(transcript, shorts):
+    """
+    Precompute per-clip captions for Remotion so the client can load subtitles
+    without re-scanning the full transcript. Each entry matches /api/clip/.../transcript.
+    """
+    if not transcript or not shorts:
+        return []
+    out = []
+    for clip in shorts:
+        cs = float(clip.get("start", 0))
+        ce = float(clip.get("end", 0))
+        caps = extract_clip_captions(transcript, cs, ce)
+        out.append(
+            {
+                "captions": caps,
+                "durationSec": max(0.0, ce - cs),
+            }
+        )
+    return out
+

@@ -52,6 +52,9 @@ export async function renderInBrowser({
         audioCodec: 'aac',
         // High bitrate for crisp 1080x1920 output — prevents WebCodecs pixelation
         videoBitrateInKbps: 8000,
+        // Burn subtitles/hook into pixels: use HTML snapshot path when the browser supports it
+        // (see https://www.remotion.dev/docs/client-side-rendering/html-in-canvas)
+        allowHtmlInCanvas: true,
         onProgress: onProgress
             ? ({ progress }) => onProgress(progress)
             : undefined,
